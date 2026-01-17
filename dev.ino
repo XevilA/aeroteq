@@ -8,9 +8,9 @@
 
 
 const char* MODEL_NAME = "AEROTEQ Nano";
-const char* FIRMWARE_VER = "v1.0-Pro";
+const char* FIRMWARE_VER = "v2.0-Prod";
 // ตั้งค่า ID ของรุ่น(aero-001, aero-002)
-const char* SERIAL_SERIES = "aero-001"; 
+const char* SERIAL_SERIES = "aero-001";
 
 
 #define BLE_SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
@@ -23,7 +23,7 @@ const int BUTTON_PIN = 10;
 const int GPS_RX_PIN = 16;
 const int GPS_TX_PIN = 17;
 
-const unsigned long SERVO_MOVE_TIME = 1000; 
+const unsigned long SERVO_MOVE_TIME = 1000;
 const unsigned long STATIONARY_TIME = 120000;
 const unsigned long SPEED_TIMEOUT   = 5000;
 const unsigned long DEBOUNCE_DELAY  = 50;
@@ -44,7 +44,7 @@ unsigned long lastDebounceTime = 0;
 
 int angles[7] = {0, 40, 80, 110, 140, 160, 180}; // Index 1..6
 int currentAngle = 0;
-int lastPos = 6; 
+int lastPos = 6;
 bool attached = false;
 
 float vHigh = 50, vLow = 50;
@@ -84,10 +84,10 @@ int getRealAngle2(int target) { return invertS2 ? 180 - target : target; }
 
 void attachServos() {
   if (!attached) {
- 
+
     s1.write(getRealAngle1(currentAngle));
     s2.write(getRealAngle2(currentAngle));
-    
+
     s1.attach(SERVO1_PIN);
     s2.attach(SERVO2_PIN);
     attached = true;
@@ -107,16 +107,16 @@ void startMoveTo(int target) {
   if (target == currentAngle && attached) return;
 
   currentAngle = target;
-  
+
   // Attach (พร้อม Anti-Jitter ภายในฟังก์ชัน)
   attachServos();
-  
+
   // ย้ำค่าอีกครั้งเพื่อความชัวร์
   s1.write(getRealAngle1(target));
   s2.write(getRealAngle2(target));
-  
+
   isServoMoving = true;
-  servoMoveStart = millis(); 
+  servoMoveStart = millis();
 }
 
 void servoTick() {
@@ -130,14 +130,14 @@ void servoTick() {
 
 void executeMove(int posIndex) {
   if (posIndex < 1 || posIndex > 6) return;
-  
+
 
   if (lastPos != posIndex) {
     lastPos = posIndex;
     EEPROM.writeInt(ADDR_LAST_POS, lastPos);
     EEPROM.commit();
   }
-  
+
   Serial.printf("[Action] Moving to M%d (%d deg)\n", lastPos, angles[lastPos]);
   startMoveTo(angles[lastPos]);
 }
@@ -161,14 +161,14 @@ void loadEEP() {
   }
   lastPos = EEPROM.readInt(ADDR_LAST_POS);
   if (lastPos < 1 || lastPos > 6) lastPos = 6;
-  
+
   float vh = EEPROM.readFloat(ADDR_HIGH);
-  if (vh > 0) vHigh = vh; 
+  if (vh > 0) vHigh = vh;
   float vl = EEPROM.readFloat(ADDR_LOW);
   if (vl > 0) vLow = vl;
-  
+
   vThresh = EEPROM.readFloat(ADDR_VTHRESH);
-  if (vThresh < 0) vThresh = 50; 
+  if (vThresh < 0) vThresh = 50;
   singleThreshEnabled = (EEPROM.readInt(ADDR_STEN) == 1);
   hyst = EEPROM.readFloat(ADDR_HYST);
   if(hyst < 0) hyst = 0;
@@ -182,9 +182,9 @@ void loadEEP() {
 // ================= BLE SETUP =================
 class MyServerCallbacks: public BLEServerCallbacks {
   void onConnect(BLEServer* pServer) { bleConnected = true; }
-  void onDisconnect(BLEServer* pServer) { 
-    bleConnected = false; 
-    pServer->getAdvertising()->start(); 
+  void onDisconnect(BLEServer* pServer) {
+    bleConnected = false;
+    pServer->getAdvertising()->start();
   }
 };
 
@@ -211,22 +211,22 @@ void bleInit() {
   BLEDevice::init(fullDeviceName.c_str());
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
-  
+
   BLEService *pService = pServer->createService(BLE_SERVICE_UUID);
   pChar = pService->createCharacteristic(BLE_CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_NOTIFY);
   pChar->addDescriptor(new BLE2902());
   pChar->setCallbacks(new MyCharCallbacks());
   pService->start();
-  
+
   // *** CRITICAL FOR APP FILTERING ***
   // บังคับ Advertise Service UUID เพื่อให้ App กรองหาเจอได้ง่าย
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(BLE_SERVICE_UUID);
   pAdvertising->setScanResponse(true);
-  pAdvertising->setMinPreferred(0x06); 
+  pAdvertising->setMinPreferred(0x06);
   pAdvertising->setMinPreferred(0x12);
   BLEDevice::startAdvertising();
-  
+
   Serial.println("BLE Started as: " + fullDeviceName);
 }
 
@@ -246,18 +246,18 @@ void handleCmd(String cmd) {
   if (toupper(cmd[0]) == 'M') {
     int pos = cmd.substring(1).toInt();
     if (pos >= 1 && pos <= 6) { executeMove(pos); autoMode = false; }
-  } 
+  }
   else if (cmd.equalsIgnoreCase("OPEN")) { executeMove(1); autoMode = false; }
   else if (cmd.equalsIgnoreCase("CLOSE")) { executeMove(6); autoMode = false; }
   else if (cmd.equalsIgnoreCase("AUTO")) { autoMode = true; }
-  
+
   // --- SETTINGS ---
   else if (cmd.startsWith("SET HIGH ")) { vHigh = cmd.substring(9).toFloat(); saveSettings(); }
   else if (cmd.startsWith("SET LOW ")) { vLow = cmd.substring(8).toFloat(); saveSettings(); }
   else if (cmd.startsWith("SET HYST ")) { hyst = cmd.substring(9).toFloat(); saveSettings(); }
   else if (cmd.equalsIgnoreCase("INVERT S1")) { invertS1 = !invertS1; saveSettings(); }
   else if (cmd.equalsIgnoreCase("INVERT S2")) { invertS2 = !invertS2; saveSettings(); }
-  
+
   // --- IDENTITY COMMAND ---
   // App สามารถส่งคำสั่ง "WHO" มาถามได้ว่านี่คือบอร์ดรุ่นไหน ID อะไร
   else if (cmd.equalsIgnoreCase("WHO") || cmd.equalsIgnoreCase("INFO")) {
@@ -276,7 +276,7 @@ void handleCmd(String cmd) {
   }
   else if (cmd.equalsIgnoreCase("GET GPS")) {
     char buf[64];
-    snprintf(buf, sizeof(buf), "GPS|%.6f|%.6f|%d|%.1f", 
+    snprintf(buf, sizeof(buf), "GPS|%.6f|%.6f|%d|%.1f",
       gps.location.lat(), gps.location.lng(), gps.satellites.value(), gps.speed.kmph());
     bleNotify(String(buf));
   }
@@ -284,7 +284,7 @@ void handleCmd(String cmd) {
 
 void gpsTick() {
   // จำกัดการอ่านต่อลูป เพื่อไม่ให้ Block การทำงานอื่นเกินไป (Safety)
-  int maxChars = 50; 
+  int maxChars = 50;
   while (GPS.available() && maxChars-- > 0) {
     if (gps.encode(GPS.read())) {
       if (gps.speed.isValid()) {
@@ -322,7 +322,7 @@ void buttonTick() {
   if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {
     if (reading != buttonLogicState) {
       buttonLogicState = reading;
-      if (buttonLogicState == LOW) { 
+      if (buttonLogicState == LOW) {
         if (lastPos == 6) { executeMove(1); autoMode = false; }
         else { executeMove(6); autoMode = true; }
       }
@@ -333,27 +333,30 @@ void buttonTick() {
 
 void setup() {
   Serial.begin(115200);
-  
+
   // ตั้งค่า Frequency ให้เหมาะกับ Servo ทั่วไป (50Hz)
-  s1.setPeriodHertz(50); 
+  s1.setPeriodHertz(50);
   s2.setPeriodHertz(50);
-  
+
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+  // ADC Configuration for Voltage Sensing
+  pinMode(34, INPUT);
+
   GPS.begin(9600, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
-  
+
   bleCommandToProcess[0] = '\0';
   loadEEP();
-  
+
   // ตั้งค่าเริ่มต้นของ Servo (จะ Write ก่อน Attach ในฟังก์ชันนี้)
   currentAngle = angles[lastPos];
-  attachServos(); 
-  
+  attachServos();
+
   bleInit(); // เริ่ม BLE ด้วยชื่อ AEROTEQ Nano + MAC
 }
 
 void loop() {
   gpsTick(); buttonTick(); servoTick();
-  
+
   if (bleCommandFlag) {
     String cmd;
     // ป้องกัน Race Condition เล็กน้อย
@@ -364,9 +367,9 @@ void loop() {
     handleCmd(cmd);
   }
   if (Serial.available()) handleCmd(Serial.readStringUntil('\n'));
-  
+
   autoControl();
-  
+
   // Periodic Notify (ส่งสถานะทุก 1 วินาที)
   static unsigned long lastNotify = 0;
   if (bleConnected && millis() - lastNotify > 1000) {
@@ -375,5 +378,24 @@ void loop() {
     // Format: M(Pos)|Speed|Mode
     snprintf(msg, sizeof(msg), "M%d|%.1f|%s", lastPos, curSpeed, autoMode?"A":"M");
     bleNotify(String(msg));
+  }
+
+  // Hardware Telemetry (ส่งทุก 5 วินาที)
+  static unsigned long lastHwNotify = 0;
+  if (bleConnected && millis() - lastHwNotify > 5000) {
+    lastHwNotify = millis();
+
+    // --- REAL SENSOR READS ---
+    // Temperature: Internal ESP32 Sensor (Celsius)
+    float realTemp = temperatureRead();
+
+    // Voltage: Read from GPIO 34 (Common ADC for battery/input)
+    // Using analogReadMilliVolts for better precision, assuming 1/2 divider
+    float realVolt = (analogReadMilliVolts(34) * 2.0) / 1000.0;
+
+    char hwMsg[64];
+    // Format: HW|Voltage|Temp|Heap
+    snprintf(hwMsg, sizeof(hwMsg), "HW|%.1f|%.1f|%d", realVolt, realTemp, ESP.getFreeHeap());
+    bleNotify(String(hwMsg));
   }
 }
